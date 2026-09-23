@@ -13,8 +13,26 @@ from flet_app.models import Message
 def main(page: ft.Page):
     page.title, page.padding, page.theme_mode, page.scroll = "Robot Control Center", 20, ft.ThemeMode.DARK, ft.ScrollMode.ALWAYS
 
+    wd_uptime = ft.Text("Tiempo Activo: -- s", size=16)
+    wd_status = ft.Text("Estado: Esperando datos...", color=ft.colors.YELLOW_400, size=16, weight=ft.FontWeight.BOLD)
+
     def on_msg(msg: Message):
-        log.value += f"\n[{msg.topic}] >> {msg.payload}"
+        if msg.topic == "debug/watchdog":
+            try:
+                data = json.loads(msg.payload)
+                if "uptime_s" in data:
+                    wd_uptime.value = f"Tiempo Activo: {data['uptime_s']} s"
+                if "status" in data:
+                    if data["status"] == "ok":
+                        wd_status.value = "Estado: OK"
+                        wd_status.color = ft.colors.GREEN_400
+                    else:
+                        wd_status.value = f"Estado: {data['status']}"
+                        wd_status.color = ft.colors.RED_400
+            except Exception:
+                pass
+        else:
+            log.value += f"\n[{msg.topic}] >> {msg.payload}"
         page.update()
 
     mqtt_ctrl = MQTTController(on_message_callback=on_msg)
@@ -22,10 +40,10 @@ def main(page: ft.Page):
     # 1. Configuración
     broker_field = ft.TextField(label="Broker", value=config.BROKER, width=250)
     port_field = ft.TextField(label="Puerto", value=str(config.PORT), width=100)
-    status = ft.Text("Desconectado", color=ft.Colors.RED_400)
+    status = ft.Text("Desconectado", color=ft.colors.RED_400)
     def connect_click(e):
         mqtt_ctrl.connect(broker_field.value, int(port_field.value))
-        status.value, status.color = "Conectado", ft.Colors.GREEN_400
+        status.value, status.color = "Conectado", ft.colors.GREEN_400
         page.update()
     c1 = ft.Container(content=ft.Column([ft.Text("1. Configuración", weight="bold"), ft.Row([broker_field, port_field, ft.ElevatedButton("Conectar", on_click=connect_click)]), status]), padding=15)
 
@@ -49,7 +67,17 @@ def main(page: ft.Page):
     def sub_click(e): mqtt_ctrl.subscribe(sub_topic.value); log.value += f"\n--- Escuchando: {sub_topic.value} ---"; page.update()
     c4 = ft.Container(content=ft.Column([ft.Text("4. Monitor", weight="bold"), ft.Row([sub_topic, ft.ElevatedButton("Suscribir", on_click=sub_click)]), ft.Container(content=ft.Column([log], scroll=ft.ScrollMode.AUTO), height=150)]), padding=15)
 
-    page.add(c1, c2, c3, c4)
+    # 5. Watchdog
+    c_watchdog = ft.Container(
+        content=ft.Column([
+            ft.Text("5. Salud de la Pico 2 W (Watchdog)", weight=ft.FontWeight.BOLD),
+            ft.Row([wd_uptime, wd_status])
+        ]),
+        padding=15,
+        bgcolor=ft.colors.ON_INVERSE_SURFACE
+    )
+
+    page.add(c1, c2, c3, c_watchdog, c4)
 
 if __name__ == "__main__":
     ft.app(target=main)

@@ -1,0 +1,2 @@
+El código correspondiente al Taller 3 (Generación de Trayectorias S mediante JSON y Monitoreo de Watchdog) es la versión completa del proyecto.
+Se ejecuta corriendo el archivo "main.py" que se encuentra en la raíz principal del proyecto.
