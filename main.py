@@ -11,9 +11,12 @@ def main(page: ft.Page):
 
     PREFIX = "UDFJC/iot_ws/robot5/"
     WATCHDOG_TOPIC = PREFIX + "watchdog/stats"
-    DOOR_TOPIC = PREFIX + "GPIOIn/GP16"
+    DOOR_TOPIC = PREFIX + "GPIOIn/GP13"
     IR_TOPIC = PREFIX + "IRIn/value"
     LED_TOPIC = PREFIX + "GPIOOut/LED"
+    CAR_TOPIC = PREFIX + "CAR"
+    SERVO1_TOPIC = PREFIX + "servo1"
+    SERVO2_TOPIC = PREFIX + "servo2"
 
     wd_uptime = ft.Text("Tiempo activo: -- s", size=16, font_family="monospace")
     wd_status = ft.Text("Estado: Esperando datos...", color=ft.colors.YELLOW_400, size=16, weight=ft.FontWeight.BOLD)
@@ -51,7 +54,8 @@ def main(page: ft.Page):
     ir_buffer = []
     PASSWORD = [16753245, 16736925, 16720605, 16769055] # Contraseña exacta: 1 -> 2 -> 4 -> 7
 
-    door_status_text = ft.Text("PUERTA 1 DESCONOCIDA", size=20, weight=ft.FontWeight.BOLD, color=ft.colors.GREY_400)
+    door_status_text = ft.Text("⏳ ESPERANDO GP13...", size=20, weight=ft.FontWeight.BOLD, color=ft.colors.YELLOW_400)
+    door_gpio_text = ft.Text("GP13 = --", size=14, color=ft.colors.GREY_400, weight=ft.FontWeight.BOLD)
     ir_last_code_text = ft.Text("Último código recibido: --", size=14, color=ft.colors.GREY_400)
     ir_history_list = ft.ListView(height=100, spacing=5)
     
@@ -112,16 +116,18 @@ def main(page: ft.Page):
     def handle_door(is_open):
         nonlocal alarm_state
         if is_open:
-            door_status_text.value, door_status_text.color = "PUERTA 1 ABIERTA", ft.colors.RED_400
-            print("[DOOR] Estado puerta: ABIERTA")
+            door_status_text.value, door_status_text.color = "🚪 PUERTA ABIERTA", ft.colors.RED_400
+            door_gpio_text.value, door_gpio_text.color = "GP13 = 1", ft.colors.RED_200
+            print("[DOOR] Estado puerta: ABIERTA (GP13 = 1)")
             if alarm_state == "ARMADA":
                 print("[ALARM] ARMADA -> DISPARADA")
                 alarm_state = "DISPARADA"
                 intrusion_cause_text.value = "Causa: PUERTA ABIERTA"
                 update_alarm_ui()
         else:
-            door_status_text.value, door_status_text.color = "PUERTA 1 CERRADA", ft.colors.GREEN_400
-            print("[DOOR] Estado puerta: CERRADA")
+            door_status_text.value, door_status_text.color = "🔒 PUERTA CERRADA", ft.colors.GREEN_400
+            door_gpio_text.value, door_gpio_text.color = "GP13 = 0", ft.colors.GREEN_200
+            print("[DOOR] Estado puerta: CERRADA (GP13 = 0)")
         page.update()
 
     def update_alarm_ui():
@@ -208,7 +214,13 @@ def main(page: ft.Page):
                     wd_status.value, wd_status.color = f"Estado: {data.get('status')}", ft.colors.RED_400
             except Exception: pass
         elif msg.topic == DOOR_TOPIC:
-            pass # IGNORADO TEMPORALMENTE (Sensor físico desconectado, se usa puerta virtual)
+            try:
+                data = json.loads(msg.payload)
+                val = data.get("value")
+                if val is not None:
+                    handle_door(int(val) == 1)
+            except Exception as e:
+                print(f"[DOOR] Error al procesar mensaje: {e}")
 
         elif msg.topic == IR_TOPIC:
             try:
@@ -216,6 +228,38 @@ def main(page: ft.Page):
                 code = data.get("value")
                 if code is not None:
                     process_ir_code(code)
+            except Exception: pass
+        elif msg.topic == CAR_TOPIC + "/status":
+            try:
+                data = json.loads(msg.payload)
+                st = str(data.get('status', 'DESCONOCIDO')).upper()
+                if st == "MOVIENDO":
+                    v_val = data.get('v', 0.0)
+                    w_val = data.get('w', 0.0)
+                    car_status.value = f"Motores: EN MOVIMIENTO (v={v_val:.2f}, w={w_val:.2f})"
+                    car_status.color = ft.colors.BLUE_400
+                elif st in ["DETENIDO", "STOPPED"]:
+                    car_status.value = "Motores: DETENIDOS"
+                    car_status.color = ft.colors.GREEN_400
+                else:
+                    car_status.value = f"Motores: {st}"
+                    car_status.color = ft.colors.AMBER_400
+            except Exception: pass
+        elif msg.topic == SERVO1_TOPIC + "/status":
+            try:
+                data = json.loads(msg.payload)
+                ang = data.get('angle')
+                if ang is not None:
+                    servo1_val_text.value = f"{float(ang):.0f}°"
+                    servo1_slider.value = float(ang)
+            except Exception: pass
+        elif msg.topic == SERVO2_TOPIC + "/status":
+            try:
+                data = json.loads(msg.payload)
+                ang = data.get('angle')
+                if ang is not None:
+                    servo2_val_text.value = f"{float(ang):.0f}°"
+                    servo2_slider.value = float(ang)
             except Exception: pass
         else:
             log.value += f"\n[{msg.topic}] >> {msg.payload}"
@@ -245,6 +289,9 @@ def main(page: ft.Page):
         mqtt_ctrl.subscribe(WATCHDOG_TOPIC)
         mqtt_ctrl.subscribe(DOOR_TOPIC)
         mqtt_ctrl.subscribe(IR_TOPIC)
+        mqtt_ctrl.subscribe(CAR_TOPIC + "/status")
+        mqtt_ctrl.subscribe(SERVO1_TOPIC + "/status")
+        mqtt_ctrl.subscribe(SERVO2_TOPIC + "/status")
         page.update()
         
     card_config = ft.Card(
@@ -307,10 +354,7 @@ def main(page: ft.Page):
         )
     )
 
-    # 4. Sensor Puerta
-    def btn_open_door(e): handle_door(True)
-    def btn_close_door(e): handle_door(False)
-
+    # 4. Sensor Puerta (Físico GP16)
     card_puerta = ft.Card(
         elevation=4,
         content=card_container(
@@ -318,12 +362,8 @@ def main(page: ft.Page):
                 ft.Row([ft.Icon(ft.icons.DOOR_FRONT_DOOR, color=ft.colors.BROWN_400), ft.Text("🚪 SENSOR DE PUERTA", weight=ft.FontWeight.BOLD, size=18)]),
                 ft.Divider(color=ft.colors.WHITE24),
                 door_status_text,
-                ft.Text("Simulación GP16", size=12, color=ft.colors.GREY_500),
                 ft.Container(height=5),
-                ft.Row([
-                    ft.ElevatedButton("ABRIR PUERTA", on_click=btn_open_door, bgcolor=ft.colors.RED_700, color=ft.colors.WHITE),
-                    ft.ElevatedButton("CERRAR PUERTA", on_click=btn_close_door, bgcolor=ft.colors.GREEN_700, color=ft.colors.WHITE)
-                ], alignment=ft.MainAxisAlignment.CENTER)
+                door_gpio_text
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER)
         )
     )
@@ -450,12 +490,156 @@ def main(page: ft.Page):
         )
     )
 
+    # 10. Control CAR y Servomotores
+    car_status = ft.Text("Motores: DETENIDOS", weight=ft.FontWeight.BOLD, color=ft.colors.GREEN_400, size=15)
+    car_last_cmd = ft.Text("Último comando: Ninguno", color=ft.colors.CYAN_200, size=13)
+    
+    # --- Servomotores independientes (GP15 y GP14) ---
+    servo1_val_text = ft.Text("0°", weight=ft.FontWeight.BOLD, color=ft.colors.AMBER_300, size=15)
+    servo2_val_text = ft.Text("0°", weight=ft.FontWeight.BOLD, color=ft.colors.ORANGE_300, size=15)
+
+    def send_servo1(angle):
+        ang_int = int(round(angle))
+        servo1_val_text.value = f"{ang_int}°"
+        mqtt_ctrl.publish(SERVO1_TOPIC, json.dumps({"angle": ang_int}))
+        page.update()
+
+    def send_servo2(angle):
+        ang_int = int(round(angle))
+        servo2_val_text.value = f"{ang_int}°"
+        mqtt_ctrl.publish(SERVO2_TOPIC, json.dumps({"angle": ang_int}))
+        page.update()
+
+    servo1_slider = ft.Slider(min=-90, max=90, value=0, divisions=180, label="{value}°", expand=True,
+                              on_change=lambda e: send_servo1(e.control.value))
+    servo2_slider = ft.Slider(min=-90, max=90, value=0, divisions=180, label="{value}°", expand=True,
+                              on_change=lambda e: send_servo2(e.control.value))
+
+    # --- Cinemática Diferencial CAR ---
+    car_v_slider = ft.Slider(min=-1.0, max=1.0, value=0.4, divisions=40, label="{value} m/s", width=190)
+    car_w_slider = ft.Slider(min=-3.14, max=3.14, value=0.0, divisions=60, label="{value} rad/s", width=190)
+    car_t_field = ft.TextField(label="Tiempo t (s)", value="2.50", width=110, border_color=ft.colors.BLUE_GREY_700)
+    
+    def send_car_cmd(v, w, t, label=""):
+        payload = {"v": round(v, 3), "w": round(w, 3), "t": round(t, 2)}
+        mqtt_ctrl.publish(CAR_TOPIC, json.dumps(payload))
+        car_last_cmd.value = f"Último comando: {label if label else f'v={v:.2f}, w={w:.2f}, t={t:.2f}'}"
+        page.update()
+
+    def car_avanzar_1m(e):
+        v = float(car_v_slider.value)
+        if abs(v) < 0.05:
+            v = 0.4
+            car_v_slider.value = 0.4
+        t = 1.0 / abs(v)
+        car_w_slider.value = 0.0
+        car_t_field.value = f"{t:.2f}"
+        send_car_cmd(v, 0.0, t, f"AVANZAR 1m (v={v:.2f} m/s, t={t:.2f}s)")
+
+    def car_curva_der_1m(e):
+        # 1/4 círculo radio R=1m derecha: w = -v, arco = 1.5708m, t = 1.5708/v
+        v = float(car_v_slider.value)
+        if abs(v) < 0.05:
+            v = 0.4
+            car_v_slider.value = 0.4
+        w = -abs(v)
+        t = 1.5708 / abs(v)
+        car_w_slider.value = round(w, 2)
+        car_t_field.value = f"{t:.2f}"
+        send_car_cmd(v, w, t, f"1/4 CÍRCULO DER (R=1m, v={v:.2f}, w={w:.2f}, t={t:.2f}s)")
+
+    def car_curva_izq_1m(e):
+        # 1/4 círculo radio R=1m izquierda: w = +v, arco = 1.5708m, t = 1.5708/v
+        v = float(car_v_slider.value)
+        if abs(v) < 0.05:
+            v = 0.4
+            car_v_slider.value = 0.4
+        w = abs(v)
+        t = 1.5708 / abs(v)
+        car_w_slider.value = round(w, 2)
+        car_t_field.value = f"{t:.2f}"
+        send_car_cmd(v, w, t, f"1/4 CÍRCULO IZQ (R=1m, v={v:.2f}, w={w:.2f}, t={t:.2f}s)")
+
+    def car_ejecutar_custom(e):
+        try:
+            v = float(car_v_slider.value)
+            w = float(car_w_slider.value)
+            t = float(car_t_field.value)
+        except ValueError:
+            return
+        send_car_cmd(v, w, t, f"CUSTOM (v={v:.2f}, w={w:.2f}, t={t:.2f}s)")
+
+    def car_detener(e):
+        mqtt_ctrl.publish(CAR_TOPIC, json.dumps({"v": 0.0, "w": 0.0, "t": 0.0, "cmd": "stop"}))
+        car_last_cmd.value = "Último comando: DETENER INMEDIATO"
+        car_status.value = "Motores: DETENIDOS"
+        car_status.color = ft.colors.GREEN_400
+        page.update()
+
+    card_car = ft.Card(
+        elevation=4,
+        content=card_container(
+            ft.Column([
+                ft.Row([ft.Icon(ft.icons.DIRECTIONS_CAR, color=ft.colors.GREEN_400), ft.Text("CONTROL CAR Y SERVOS", weight=ft.FontWeight.BOLD, size=18)]),
+                ft.Divider(color=ft.colors.WHITE24),
+                car_status,
+                car_last_cmd,
+                ft.Container(height=4),
+
+                # --- SERVOS ---
+                ft.Text("SERVOMOTORES (100 Hz)", weight=ft.FontWeight.BOLD, color=ft.colors.GREY_300, size=14),
+                ft.Row([
+                    ft.Icon(ft.icons.TILT_LEFT, size=18, color=ft.colors.AMBER_400),
+                    ft.Text("Servo 1 (GP15):", weight=ft.FontWeight.BOLD, size=13),
+                    servo1_val_text,
+                    servo1_slider
+                ]),
+                ft.Row([
+                    ft.Icon(ft.icons.TILT_RIGHT, size=18, color=ft.colors.ORANGE_400),
+                    ft.Text("Servo 2 (GP14):", weight=ft.FontWeight.BOLD, size=13),
+                    servo2_val_text,
+                    servo2_slider
+                ]),
+                ft.Row([
+                    ft.TextButton("-90°", on_click=lambda e: (setattr(servo1_slider, 'value', -90), send_servo1(-90))),
+                    ft.TextButton("0°", on_click=lambda e: (setattr(servo1_slider, 'value', 0), send_servo1(0))),
+                    ft.TextButton("+90°", on_click=lambda e: (setattr(servo1_slider, 'value', 90), send_servo1(90))),
+                    ft.Text("|", color=ft.colors.GREY_600),
+                    ft.TextButton("-90°", on_click=lambda e: (setattr(servo2_slider, 'value', -90), send_servo2(-90))),
+                    ft.TextButton("0°", on_click=lambda e: (setattr(servo2_slider, 'value', 0), send_servo2(0))),
+                    ft.TextButton("+90°", on_click=lambda e: (setattr(servo2_slider, 'value', 90), send_servo2(90))),
+                ], alignment=ft.MainAxisAlignment.CENTER),
+                ft.Divider(color=ft.colors.WHITE24),
+
+                # --- CINEMÁTICA Y MOTORES DC ---
+                ft.Text("CINEMÁTICA Y MOTORES DC", weight=ft.FontWeight.BOLD, color=ft.colors.GREY_300, size=14),
+                ft.Row([
+                    ft.Text("v:"), car_v_slider,
+                    ft.Text("w:"), car_w_slider
+                ], alignment=ft.MainAxisAlignment.CENTER),
+                ft.Row([
+                    car_t_field,
+                    ft.ElevatedButton("EJECUTAR (v,w,t)", on_click=car_ejecutar_custom, color=ft.colors.WHITE, icon=ft.icons.PLAY_ARROW)
+                ], alignment=ft.MainAxisAlignment.CENTER),
+                ft.Row([
+                    ft.ElevatedButton("AVANZAR 1 METRO", on_click=car_avanzar_1m, color=ft.colors.WHITE, bgcolor=ft.colors.BLUE_700, icon=ft.icons.ARROW_UPWARD),
+                    ft.ElevatedButton("DETENER", on_click=car_detener, color=ft.colors.WHITE, bgcolor=ft.colors.RED_700, icon=ft.icons.STOP),
+                ], alignment=ft.MainAxisAlignment.CENTER),
+                ft.Row([
+                    ft.ElevatedButton("1/4 CÍRCULO IZQ", on_click=car_curva_izq_1m, color=ft.colors.WHITE, bgcolor=ft.colors.INDIGO_700, icon=ft.icons.ROTATE_LEFT),
+                    ft.ElevatedButton("1/4 CÍRCULO DER", on_click=car_curva_der_1m, color=ft.colors.WHITE, bgcolor=ft.colors.INDIGO_700, icon=ft.icons.ROTATE_RIGHT),
+                ], alignment=ft.MainAxisAlignment.CENTER)
+            ])
+        )
+    )
+
+
     # ---------------- ASSEMBLE DASHBOARD ----------------
     page.add(
         card_config,
         ft.ResponsiveRow([
             ft.Column([card_power, card_watchdog, card_puerta, card_alarma], col={"sm": 12, "md": 4}),
-            ft.Column([card_ir, card_led], col={"sm": 12, "md": 4}),
+            ft.Column([card_ir, card_led, card_car], col={"sm": 12, "md": 4}),
             ft.Column([card_accion, card_trayectoria], col={"sm": 12, "md": 4}),
         ]),
         card_monitor
