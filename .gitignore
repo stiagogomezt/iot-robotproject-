@@ -1,4 +1,15 @@
 .venv/
+venv/
 __pycache__/
 *.pyc
+*.mpy
 .pytest_cache/
+reporte_sesion_iot.json
+
+# Seguridad - Archivos sensibles y respaldos
+.env
+*.env
+respaldo_pico_*/
+etstwifi.py
+pruewifi.py
+ENTREGA_FINAL/*.zip
