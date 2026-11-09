@@ -1,2 +1,7 @@
-El código correspondiente al Taller 3 (Generación de Trayectorias S mediante JSON y Monitoreo de Watchdog) es la versión completa del proyecto.
-Se ejecuta corriendo el archivo "main.py" que se encuentra en la raíz principal del proyecto.
+El código correspondiente al Taller 3 y a la integración completa del Proyecto Final
+(Watchdog, Sistema de Alarma con Sensor de Puerta GP13 + Teclado IR NEC GP22 + LED,
+Cinemática Diferencial CAR, Modelo de Bicicleta, Servomotores PWM 100 Hz y Odometría 2D)
+se encuentra modularizado en los paquetes `common/` y `flet_app/`.
+
+Se ejecuta desde la raíz del proyecto con:
+    python main.py
