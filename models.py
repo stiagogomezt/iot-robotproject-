@@ -1,6 +1,3 @@
-from dataclasses import dataclass
+from flet_app.models import LogEntry, Message
 
-@dataclass
-class Message:
-    topic: str
-    payload: str
+__all__ = ["LogEntry", "Message"]
