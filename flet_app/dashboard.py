@@ -1895,6 +1895,28 @@ def main(page: ft.Page) -> None:
         on_click=toggle_theme_click,
     )
 
+    def show_help_dialog(e=None) -> None:
+        dlg = ft.AlertDialog(
+            title=ft.Text("Atajos de Teclado y Ayuda Rápida"),
+            content=ft.Text(
+                "• Flechas o W / A / S / D: Conducción manual (envío cada 150 ms, duración 0.3 s).\n"
+                "• ESPACIO o ESC: Parada de Emergencia inmediata.\n"
+                "• Botón PARADA DE EMERGENCIA: Detiene motores y secuencia activa.\n"
+                "• Bloquear / Desbloquear: Ignora o acepta órdenes externas en el robot.",
+                size=13,
+            ),
+            actions=[ft.TextButton("Cerrar", on_click=lambda _: setattr(dlg, "open", False) or page.update())],
+        )
+        page.overlay.append(dlg)
+        dlg.open = True
+        page.update()
+
+    help_btn = ft.IconButton(
+        icon=ft.Icons.HELP_OUTLINE,
+        tooltip="Atajos de teclado y ayuda",
+        on_click=show_help_dialog,
+    )
+
     page.appbar = ft.AppBar(
         leading=ft.Icon(ft.Icons.MEMORY, color=ft.Colors.CYAN_400),
         title=ft.Text(
@@ -1914,6 +1936,7 @@ def main(page: ft.Page) -> None:
                 on_click=emergency_stop,
             ),
             ft.Container(width=6),
+            help_btn,
             theme_btn,
             ft.Container(width=6),
         ],
@@ -3384,6 +3407,31 @@ def main(page: ft.Page) -> None:
             ],
         ),
     )
+
+    _last_kbd_ts = [0.0]
+
+    def _on_keyboard_event(e: ft.KeyboardEvent) -> None:
+        key = (e.key or "").lower()
+        if key in (" ", "space", "escape", "esc"):
+            emergency_stop()
+            return
+        now_ts = time.time()
+        if now_ts - _last_kbd_ts[0] < 0.15:
+            return
+        if key in ("arrow up", "w"):
+            _last_kbd_ts[0] = now_ts
+            send_official_motion_state(2.0, 0.0, 0.0, 0.0, 0.3)
+        elif key in ("arrow down", "s"):
+            _last_kbd_ts[0] = now_ts
+            send_official_motion_state(-2.0, 0.0, 0.0, 0.0, 0.3)
+        elif key in ("arrow left", "a"):
+            _last_kbd_ts[0] = now_ts
+            send_official_motion_state(0.0, 45.0, 0.0, 0.0, 0.3)
+        elif key in ("arrow right", "d"):
+            _last_kbd_ts[0] = now_ts
+            send_official_motion_state(0.0, -45.0, 0.0, 0.0, 0.3)
+
+    page.on_keyboard_event = _on_keyboard_event
 
     page.add(
         ft.Column(
