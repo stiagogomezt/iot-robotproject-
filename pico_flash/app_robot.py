@@ -163,7 +163,7 @@ def run():
         print(f"⚠️ Aviso al iniciar WatchdogTask: {e}")
 
     # 11. Tarea de latido (Heartbeat 1 Hz) y refresco OLED
-    StatusTask(
+    status_task = StatusTask(
         scheduler=scheduler,
         node=node,
         net=net,
@@ -171,6 +171,7 @@ def run():
         car=car,
         oled=oled,
         door=door.pin if door is not None else None,
+        motion_exec=motion_exec,
         period_ms=1000,
     )
 
@@ -181,7 +182,7 @@ def run():
     if getattr(robot_config, "POT_ENABLED", False):
         try:
             from pot_scroll import PotScroll
-            PotScroll(scheduler=scheduler, oled=oled, pin_adc=robot_config.POT_PIN)
+            PotScroll(scheduler=scheduler, oled=oled, status_task=status_task, pin_adc=robot_config.POT_PIN)
         except Exception as e:
             print(f"⚠️ Aviso al iniciar PotScroll: {e}")
 

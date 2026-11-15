@@ -29,9 +29,10 @@ class PotScroll(Task):
     Si POT_ENABLED=False en robot_config, no realiza ninguna acción.
     """
 
-    def __init__(self, scheduler, oled=None, pin_adc=robot_config.POT_PIN, period_ms=100):
+    def __init__(self, scheduler, oled=None, status_task=None, pin_adc=robot_config.POT_PIN, period_ms=100):
         super().__init__(scheduler, period_ms=period_ms, priority=4, name="PotScroll")
         self.oled = oled
+        self.status_task = status_task
         self.pin_adc = pin_adc
         self.adc = None
         self.last_offset = 0
@@ -49,11 +50,13 @@ class PotScroll(Task):
 
         try:
             val_u16 = self.adc.read_u16()
-            # Mapeo a offset de scroll de 0 a 4 líneas
-            offset = int((val_u16 / 65535.0) * 4)
+            # Mapeo a offset de scroll de 0 a 3 líneas
+            offset = int((val_u16 / 65535.0) * 3)
             if offset != self.last_offset:
                 self.last_offset = offset
-                if self.oled and hasattr(self.oled, "set_scroll_offset"):
+                if self.status_task and hasattr(self.status_task, "set_scroll_offset"):
+                    self.status_task.set_scroll_offset(offset)
+                elif self.oled and hasattr(self.oled, "set_scroll_offset"):
                     self.oled.set_scroll_offset(offset)
         except Exception:
             pass
