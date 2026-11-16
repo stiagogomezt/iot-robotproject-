@@ -105,6 +105,13 @@ TRIM_R = 1.0           # Factor de compensación motor derecho
 POT_ENABLED = False
 POT_PIN = 26  # GP26 (Pin 31 físico, ADC0)
 
+# Monitor de batería por ADC (06_Taller_Bateria_ADC) — usar divisor de tensión en GP28 (ADC2)
+BATTERY_ENABLED = False
+BATTERY_ADC_PIN = 28
+BATTERY_DIVIDER = 2.0
+BATTERY_MIN_V = 3.3
+BATTERY_MAX_V = 4.2
+
 FAILSAFE_MS = 1000
 WDT_ENABLED = False
 WDT_TIMEOUT_MS = 8000

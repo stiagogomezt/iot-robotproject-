@@ -297,3 +297,61 @@ def preview_states_points(start_pose: Pose2D, states: list[dict]) -> list[tuple[
     sim.apply_states(states)
     return sim.trail
 
+
+def arm_forward_kinematics(
+    alpha1_deg: float,
+    alpha2_deg: float,
+    l1_m: float = 0.10,
+    l2_m: float = 0.10,
+) -> tuple[float, float, float]:
+    """
+    Cinemática directa del brazo planar de 2 eslabones (09_Taller_Arm):
+      - alpha1_deg: ángulo absoluto del hombro respecto a la horizontal.
+      - alpha2_deg: ángulo absoluto del antebrazo respecto a la horizontal.
+      - codo_relativo_deg = alpha2_deg - alpha1_deg.
+    Retorna (x_m, y_m, codo_relativo_deg).
+    """
+    a1 = math.radians(float(alpha1_deg))
+    a2 = math.radians(float(alpha2_deg))
+    x = float(l1_m) * math.cos(a1) + float(l2_m) * math.cos(a2)
+    y = float(l1_m) * math.sin(a1) + float(l2_m) * math.sin(a2)
+    return x, y, float(alpha2_deg) - float(alpha1_deg)
+
+
+def arm_inverse_kinematics(
+    x_m: float,
+    y_m: float,
+    l1_m: float = 0.10,
+    l2_m: float = 0.10,
+    elbow_up: bool = True,
+) -> tuple[float, float]:
+    """
+    Cinemática inversa del brazo planar de 2 eslabones (09_Taller_Arm).
+    Retorna (alpha1_deg, alpha2_deg) en ángulos absolutos respecto a la horizontal.
+    """
+    l1 = max(1e-6, float(l1_m))
+    l2 = max(1e-6, float(l2_m))
+    x = float(x_m)
+    y = float(y_m)
+    r2 = x * x + y * y
+    r = math.sqrt(r2)
+    max_reach = l1 + l2
+    min_reach = abs(l1 - l2)
+    if r > max_reach and r > 0:
+        scale = (max_reach - 1e-6) / r
+        x *= scale
+        y *= scale
+        r2 = x * x + y * y
+    elif r < min_reach and r > 0:
+        scale = (min_reach + 1e-6) / r
+        x *= scale
+        y *= scale
+        r2 = x * x + y * y
+
+    cos_q2 = max(-1.0, min(1.0, (r2 - l1 * l1 - l2 * l2) / (2.0 * l1 * l2)))
+    q2 = -math.acos(cos_q2) if elbow_up else math.acos(cos_q2)
+    q1 = math.atan2(y, x) - math.atan2(l2 * math.sin(q2), l1 + l2 * math.cos(q2))
+    alpha1_deg = math.degrees(q1)
+    alpha2_deg = math.degrees(q1 + q2)
+    return alpha1_deg, alpha2_deg
+

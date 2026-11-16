@@ -27,17 +27,19 @@ Protocolo estricto para transferir el firmware validado desde la carpeta `pico_f
 13. `gpio_out.py`
 14. `ir_in.py`
 15. `pot_scroll.py`
-16. `calibracion_motores.py`
-17. `node.py`
-18. `scheduler.py`
-19. `task.py`
-20. `ring_buffer.py`
-21. `util.py`
-22. `watchdog_task.py`
-23. `driver/` (carpeta con `IrReader.py`)
-24. `umqtt/` (carpeta con `simple.py`)
-25. `app_robot.py`
-26. `.env` (archivo local en la Pico con la clave del hotspot Wi-Fi)
+16. `alarm_module.py`
+17. `battery_monitor.py`
+18. `calibracion_motores.py`
+19. `node.py`
+20. `scheduler.py`
+21. `task.py`
+22. `ring_buffer.py`
+23. `util.py`
+24. `watchdog_task.py`
+25. `driver/` (carpeta con `IrReader.py`)
+26. `umqtt/` (carpeta con `simple.py`)
+27. `app_robot.py`
+28. `.env` (archivo local en la Pico con la clave del hotspot Wi-Fi)
 
 ---
 

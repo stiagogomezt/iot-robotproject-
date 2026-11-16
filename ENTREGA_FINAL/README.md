@@ -51,15 +51,16 @@ graph TD
 |---|---|---|---|
 | **Motor L298N IN1** | GP19 | Rueda Izquierda Avance | Alimentación lógica 3.3V desde Pico. Batería externa (6-12V) a bornera L298N. |
 | **Motor L298N IN2** | GP18 | Rueda Izquierda Retroceso | |
-| **Motor L298N IN3 (lógico)** | GP16 | Rueda Derecha Avance | Corregido por software: IN3 lógico = GP16, IN4 lógico = GP17. |
-| **Motor L298N IN4 (lógico)** | GP17 | Rueda Derecha Retroceso | |
+| **Motor L298N IN3** | GP17 | Rueda Derecha Avance | Corregido manualmente en físico (`PIN_MOTOR_IN3 = 17, PIN_MOTOR_IN4 = 16`). |
+| **Motor L298N IN4** | GP16 | Rueda Derecha Retroceso | |
 | **Servo 1 (Hombro)** | GP15 | PWM 100 Hz | **OBLIGATORIO: 5V externos**, masa común (GND) con la Pico. |
 | **Servo 2 (Codo)** | GP14 | PWM 100 Hz | **OBLIGATORIO: 5V externos**, masa común (GND) con la Pico. |
 | **OLED SDA** | GP20 | I2C0 SDA (400 kHz) | Alimentación 3.3V (Pin 36), GND (Pin 38). |
 | **OLED SCL** | GP21 | I2C0 SCL (400 kHz) | |
-| **Sensor de Puerta** | GP13 | Entrada digital Pull-Up | Contacto seco magnético a GND. |
-| **Receptor IR** | GP22 | Entrada PIO NEC 38 kHz | Alimentación 3.3V, salida de datos a GP22. |
-| **Potenciómetro (Opc.)** | GP26 | ADC0 (Pin 31) | Extremos a 3V3 (Pin 36) y GND, cursor central a GP26. |
+| **Sensor de Puerta** | GP13 | Entrada digital Pull-Up | Contacto seco magnético a GND (`AlarmModule` integrado). |
+| **Receptor IR** | GP22 | Entrada PIO NEC 38 kHz | Alimentación 3.3V, salida de datos a GP22 (clave `1-2-4-7`). |
+| **Potenciómetro (Opc.)** | GP26 | ADC0 (Pin 31) | Extremos a 3V3 (Pin 36) y GND, cursor central a GP26 (`POT_ENABLED=False`). |
+| **Batería ADC (Opc.)** | GP28 | ADC2 (Pin 34) | Divisor resistivo externo cuando `BATTERY_ENABLED=True` (`battery/status`). |
 
 ---
 

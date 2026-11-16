@@ -128,6 +128,13 @@ def run():
     except Exception as e:
         print(f"⚠️ Aviso al iniciar IRIn en GP22: {e}")
 
+    # Módulo de alarma IoT (GP13 puerta + IR 1-2-4-7 + LED, inicia DESARMADA)
+    try:
+        from alarm_module import AlarmModule
+        AlarmModule(scheduler=scheduler, pubsub=node, car=car, door_gpio="GP13")
+    except Exception as e:
+        print(f"⚠️ Aviso al iniciar AlarmModule: {e}")
+
     # 9. Conexión MQTT resiliente (puerto TCP 1883)
     mqtt = MqttResiliente(
         scheduler=scheduler,
@@ -185,6 +192,14 @@ def run():
             PotScroll(scheduler=scheduler, oled=oled, status_task=status_task, pin_adc=robot_config.POT_PIN)
         except Exception as e:
             print(f"⚠️ Aviso al iniciar PotScroll: {e}")
+
+    # 14. Tarea opcional de monitor de batería por ADC (06_Taller_Bateria_ADC)
+    if getattr(robot_config, "BATTERY_ENABLED", False):
+        try:
+            from battery_monitor import BatteryMonitor
+            BatteryMonitor(scheduler=scheduler, pubsub=node, pin_adc=robot_config.BATTERY_ADC_PIN)
+        except Exception as e:
+            print(f"⚠️ Aviso al iniciar BatteryMonitor: {e}")
 
     print("🚀 Sistema listo. Arrancando planificador cooperativo...")
     if oled.is_present:

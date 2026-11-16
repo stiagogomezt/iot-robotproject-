@@ -11,9 +11,12 @@ Este documento resume las correcciones técnicas aplicadas y las decisiones de i
   Timeout de 25 segundos y sondeo a 250 ms reportando códigos legibles: `1` (join), `2` (sin IP), `3` (conectado), `-1` (fallo), `-2` (no encontrada), `-3` (clave incorrecta).
 - **Tarea Cooperativa de Reconexión:** Integrada como `Task` a 1 Hz en el Scheduler de PicoROS. Si la red cae, ejecuta parada segura de motores, actualiza la OLED a `"WiFi: reconectando"`, y reintenta de forma no bloqueante cada 15 segundos.
 
-## 2. Inversión del Motor Derecho por Software
-- **Problema en Hardware:** El conexionado físico del L298N hacía que la rueda derecha girara en reversa ante órdenes de avance.
-- **Solución Implementada:** Reasignación en `robot_config.py` de `PIN_MOTOR_IN3 = 16` y `PIN_MOTOR_IN4 = 17`. El cableado físico permanece intacto, evitando riesgos de falsos contactos.
+## 2. Validación de Pines del Motor Derecho y Duración de Pasos (`car.py`)
+- **Problema en Hardware:** Inicialmente la rueda derecha giraba invertida y existía un fail-safe de 2 s que podía cortar los pasos de 5 s de `odd.json`.
+- **Solución Implementada:** Se validó manualmente la conexión final con `PIN_MOTOR_IN3 = 17` y `PIN_MOTOR_IN4 = 16` en `robot_config.py` (funcionando correctamente al avanzar). En `car.py` se eliminó el corte prematuro por `FAILSAFE_MS * 2` dentro de `update()`, conservando el paro exacto por `stop_time_ms` (con límite de seguridad de 30 s por orden).
+
+## 3. Alarma Integrada (`alarm_module.py`) y Monitor de Batería (`battery_monitor.py`)
+- **Solución Implementada:** Se integró `AlarmModule` en `pico_flash/` (inicia `DESARMADA` para no interferir con pruebas, responde a `GP13`, clave IR `1-2-4-7` y `alarm/command`) y `BatteryMonitor` opcional en `GP28` (`BATTERY_ENABLED = False`).
 
 ## 3. Sensor de Puerta GP13 de Cero Saturación (`door_sensor.py`)
 - **Problema en Hardware:** `gpio_in.py` imprimía en consola cada 500 ms, saturando el buffer UART de Thonny y el REPL.

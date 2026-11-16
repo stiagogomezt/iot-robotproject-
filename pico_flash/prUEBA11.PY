@@ -35,8 +35,9 @@ try:
         print(titulo)
         input("  Robot en la marca. Enter para ejecutar...")
         car.move_diff(v, w, dur)
-        print("  duty_izq=%+d  duty_der=%+d"
-              % (car._duty["L"] * car._dir["L"], car._duty["R"] * car._dir["R"]))
+        duty_l = car.speed_to_duty(car.current_vl) * (1 if car.current_vl >= 0 else -1)
+        duty_r = car.speed_to_duty(car.current_vr) * (1 if car.current_vr >= 0 else -1)
+        print("  duty_izq=%+d  duty_der=%+d" % (duty_l, duty_r))
         t0 = time.ticks_ms()
         limite = int(dur * 1000) + 500
         while car.is_moving and time.ticks_diff(time.ticks_ms(), t0) < limite:

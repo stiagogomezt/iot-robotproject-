@@ -132,7 +132,7 @@ class Car(Task):
         if self.is_locked:
             return
 
-        dur = float(duration_s)
+        dur = min(30.0, float(duration_s))
         if dur <= 0.0 or (abs(v_mps) < 1e-4 and abs(w_rads) < 1e-4):
             self.stop(reason="zero_cmd")
             return
@@ -152,20 +152,15 @@ class Car(Task):
         self._publish_status(force=True)
 
     def update(self):
-        """Verificación de fin de movimiento y fail-safe de seguridad en cada ciclo del scheduler."""
+        """Verificación de fin de movimiento programado en cada ciclo del scheduler."""
         if not self.is_moving:
             return
 
         now = time.ticks_ms()
 
-        # Comprobar fin de duración programada del paso
+        # Comprobar fin de duración programada del paso (permite pasos largos de 5 s o más sin corte prematuro)
         if time.ticks_diff(now, self.stop_time_ms) >= 0:
             self.stop(reason="duration_completed")
-            return
-
-        # Fail-safe adicional: si no hay órdenes en más de FAILSAFE_MS y la duración era indefinida
-        if time.ticks_diff(now, self.last_cmd_ms) > robot_config.FAILSAFE_MS * 2:
-            self.stop(reason="failsafe_timeout")
             return
 
     def _publish_status(self, force=False):

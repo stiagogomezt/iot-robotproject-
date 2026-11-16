@@ -18,8 +18,9 @@ De acuerdo con las reglas de asignación del curso:
 
 ### Configuración de Red y Broker MQTT
 * **Broker MQTT:** `broker.hivemq.com`
-* **Prefijo global (Prefix):** `UDFJC/iot_ws`
-* **Tópico Base del Robot:** `UDFJC/iot_ws/robot35/`
+* **Prefijo Primario (Publicación):** `UDFJC/carrrobot/robot35/`
+* **Prefijo Alterno (Suscripción Dual):** `UDFJC/iot_ws/robot35/`
+* **Firmware Activo Pico 2 W:** carpeta `pico_flash/` (entrega y guía completa en `ENTREGA_FINAL/`)
 
 ### Separación de Puertos y Protocolos de Transporte
 | Entorno | Transporte | Puerto | URL / Endpoint |
@@ -53,8 +54,8 @@ De acuerdo con las reglas de asignación del curso:
 | **Servo 2 (Cámara/Tilt)** | `GP14` | Salida PWM 100 Hz | `servo2` | Señal PWM: `-90°` (`6556`), `0°` (`9831`), `+90°` (`13107`) |
 | **Sensor de Puerta (Intrusión)** | `GP13` | Entrada con `PULL_UP` | `GPIOIn/GP13` | `0`: Puerta Cerrada (a GND), `1`: Puerta Abierta (dispara alarma) |
 | **Receptor Infrarrojo (IR)** | `GP22` | Entrada digital / PIO | `IRIn/value` | Receptor 38 kHz NEC 32 bits (Clave `1-2-4-7` + Teleop) |
-| **OLED SDA** | `GP26` | I2C1 Data | `oled/text` | Bus I2C SSD1306 128×64 (Dirección `0x3C`) |
-| **OLED SCL** | `GP27` | I2C1 Clock | `oled/text` | Bus I2C SSD1306 128×64 (Frecuencia 400 kHz) |
+| **OLED SDA** | `GP20` | I2C0 Data | `oled/text` | Bus I2C0 SSD1306 128×64 (Dirección `0x3C`) |
+| **OLED SCL** | `GP21` | I2C0 Clock | `oled/text` | Bus I2C0 SSD1306 128×64 (Frecuencia 400 kHz) |
 | **LED Onboard Alarma** | `"LED"` | Salida Digital | `GPIOOut/LED` | Parpadeo 5 Hz en alarma disparada / estado del nodo |
 
 > [!CAUTION]

@@ -231,6 +231,12 @@ def main(page: ft.Page) -> None:
     pill_car_txt = ft.Text("CAR: DETENIDO (Sin conf. HW)", size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.GREY_300)
     pill_oled_txt = ft.Text("OLED 0x3C: SIN CONF. HW", size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.GREY_400)
     pill_latency_txt = ft.Text("RTT: -- ms", size=12, font_family="monospace", color=ft.Colors.PURPLE_200)
+    pill_lock_txt = ft.Text("Modo: LISTO", size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.GREEN_400)
+    pill_bat_txt = ft.Text("Bat ADC: --", size=12, font_family="monospace", color=ft.Colors.AMBER_200)
+
+    choreo_progress_bar = ft.ProgressBar(value=0.0, color=ft.Colors.TEAL_400, bgcolor=ft.Colors.WHITE_10)
+    choreo_delay_txt = ft.Text("Retraso inicio agendado: -- ms", size=11, font_family="monospace", color=ft.Colors.GREY_400)
+    drive_speed_dm = [2.0]  # 1.0 Lenta | 2.0 Media | 3.5 Rápida
 
     # Indicadores explícitos Gemelo Virtual vs Hardware Físico Confirmado
     twin_car_status_txt = ft.Text(
@@ -1251,6 +1257,45 @@ def main(page: ft.Page) -> None:
         if e is not None:
             page.update()
 
+    def schedule_odd_10s_click(e=None) -> None:
+        """Crea odd.json sin run_at inmediato y agenda su ejecución en UTC + 10 s."""
+        from datetime import timezone, timedelta
+        mark_rubric("mission_seq")
+        target_utc = (datetime.now(timezone.utc) + timedelta(seconds=10)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        create_pkt = {
+            "action": "create",
+            "name": "odd",
+            "states": [dict(s) for s in OFFICIAL_ODD_STATES],
+        }
+        sched_pkt = {"action": "schedule", "name": "odd", "run_at": target_utc}
+        publish_json(topics.motion_sequence, create_pkt, force_log=True)
+        publish_json(topics.motion_sequence, sched_pkt, force_log=True)
+        twin_seq_status_txt.value = f"⏱ Coreografía 'odd' agendada para UTC {target_utc} (en 10 s)"
+        twin_seq_status_txt.color = ft.Colors.AMBER_300
+        choreo_progress_bar.value = 0.0
+        if e is not None:
+            page.update()
+
+    def lock_robot_click(e=None) -> None:
+        publish_json(topics.robot_cmd, {"cmd": "lock"}, force_log=True)
+        pill_lock_txt.value = "Modo: BLOQUEADO (enviado)"
+        pill_lock_txt.color = ft.Colors.AMBER_300
+        if e is not None:
+            page.update()
+
+    def unlock_robot_click(e=None) -> None:
+        publish_json(topics.robot_cmd, {"cmd": "unlock"}, force_log=True)
+        pill_lock_txt.value = "Modo: LISTO (enviado)"
+        pill_lock_txt.color = ft.Colors.GREEN_400
+        if e is not None:
+            page.update()
+
+    def open_virtual_twin_click(e=None) -> None:
+        try:
+            page.launch_url(config.VIRTUAL_TWIN_URL)
+        except Exception:
+            pass
+
     def emergency_stop(e=None) -> None:
         cancel_motion_animation()
         publish_json(topics.car, create_car_stop(), force_log=True)
@@ -1473,26 +1518,48 @@ def main(page: ft.Page) -> None:
                 uptime = data.get("uptime_s", "--")
                 rssi = data.get("rssi", "--")
                 ntp_ok = bool(data.get("ntp_ok", False))
+                is_locked_hb = bool(data.get("locked", False))
                 ip_hb = data.get("ip", "--")
-                pill_pico_txt.value = f"{config.NODE_NAME}: VIVO ({uptime}s | {rssi}dBm | NTP:{'OK' if ntp_ok else 'NO'})"
+                pill_pico_txt.value = f"{config.NODE_NAME}: VIVO ({uptime}s | {rssi}dBm | NTP:{'OK' if ntp_ok else 'NO'} | {ip_hb})"
                 pill_pico_txt.color = ft.Colors.GREEN_400
+                pill_lock_txt.value = "Modo: BLOQUEADO" if is_locked_hb else "Modo: LISTO"
+                pill_lock_txt.color = ft.Colors.AMBER_300 if is_locked_hb else ft.Colors.GREEN_400
                 reset_wd_timer()
             except Exception:
                 pass
 
-        elif msg.topic == topics.motion_status:
+        elif msg.topic == topics.motion_status or msg.topic.endswith("/motion/status"):
             try:
                 data = json.loads(msg.payload)
                 st_mot = str(data.get("status", "idle"))
                 seq_name = data.get("sequence", "")
-                st_step = data.get("step", 0)
-                tot_steps = data.get("total_steps", 0)
-                if st_mot == "running":
+                st_step = int(data.get("step", 0))
+                tot_steps = int(data.get("total_steps", 0))
+                delay_ms = data.get("start_delay_ms")
+                if delay_ms is not None:
+                    choreo_delay_txt.value = f"Retraso inicio agendado: {delay_ms} ms"
+                if st_mot == "running" and tot_steps > 0:
+                    choreo_progress_bar.value = max(0.0, min(1.0, st_step / tot_steps))
                     twin_seq_status_txt.value = f"[HW REAL] Coreografía '{seq_name}': Paso {st_step}/{tot_steps}"
                     twin_seq_status_txt.color = ft.Colors.GREEN_400
                 else:
+                    if data.get("reason") == "sequence_completed":
+                        choreo_progress_bar.value = 1.0
+                    elif st_mot == "idle":
+                        choreo_progress_bar.value = 0.0
                     twin_seq_status_txt.value = f"[HW REAL] Coreografía '{seq_name}': {st_mot} ({data.get('reason', '')})"
                     twin_seq_status_txt.color = ft.Colors.CYAN_300
+            except Exception:
+                pass
+
+        elif msg.topic.endswith("/battery/status"):
+            try:
+                data = json.loads(msg.payload)
+                volt = data.get("voltage", "--")
+                pct = data.get("percent", "--")
+                low_b = bool(data.get("low_battery", False))
+                pill_bat_txt.value = f"Bat ADC: {volt}V ({pct}%)"
+                pill_bat_txt.color = ft.Colors.RED_400 if low_b else ft.Colors.GREEN_300
             except Exception:
                 pass
 
@@ -1917,6 +1984,48 @@ def main(page: ft.Page) -> None:
         on_click=show_help_dialog,
     )
 
+    def show_settings_dialog(e=None) -> None:
+        s_broker = ft.TextField(label="Broker MQTT", value=broker_field.value or config.BROKER, width=260)
+        s_port = ft.TextField(label="Puerto TCP", value=port_field.value or str(config.PORT), width=120)
+        s_prefix = ft.TextField(label="Prefijo Base", value=prefix_field.value or config.BASE_PREFIX, width=260)
+        s_robot = ft.TextField(label="Número Robot", value=str(topics.robot_id), width=120)
+
+        def save_settings(_):
+            broker_field.value = s_broker.value.strip() or config.BROKER
+            port_field.value = s_port.value.strip() or str(config.PORT)
+            prefix_field.value = s_prefix.value.strip() or config.BASE_PREFIX
+            try:
+                settings_data = {
+                    "broker": broker_field.value,
+                    "port": int(port_field.value),
+                    "base_prefix": prefix_field.value,
+                    "robot_id": int(s_robot.value.strip() or 35),
+                }
+                with open("flet_settings.json", "w", encoding="utf-8") as sf:
+                    json.dump(settings_data, sf, indent=2)
+            except Exception:
+                pass
+            dlg.open = False
+            page.update()
+
+        dlg = ft.AlertDialog(
+            title=ft.Text("Ajustes de Conexión MQTT"),
+            content=ft.Column([s_broker, s_port, s_prefix, s_robot], tight=True, spacing=8),
+            actions=[
+                ft.TextButton("Cancelar", on_click=lambda _: setattr(dlg, "open", False) or page.update()),
+                ft.Button(content="Guardar", on_click=save_settings),
+            ],
+        )
+        page.overlay.append(dlg)
+        dlg.open = True
+        page.update()
+
+    settings_btn = ft.IconButton(
+        icon=ft.Icons.SETTINGS,
+        tooltip="Ajustes MQTT (Broker, Prefijo, Robot)",
+        on_click=show_settings_dialog,
+    )
+
     page.appbar = ft.AppBar(
         leading=ft.Icon(ft.Icons.MEMORY, color=ft.Colors.CYAN_400),
         title=ft.Text(
@@ -1936,6 +2045,7 @@ def main(page: ft.Page) -> None:
                 on_click=emergency_stop,
             ),
             ft.Container(width=6),
+            settings_btn,
             help_btn,
             theme_btn,
             ft.Container(width=6),
@@ -1961,6 +2071,8 @@ def main(page: ft.Page) -> None:
                         status_pill(ft.Icons.WIFI, pill_mqtt_txt, ft.Colors.BLUE_400),
                         status_pill(ft.Icons.SYNC, pill_txrx_txt, ft.Colors.CYAN_400),
                         status_pill(ft.Icons.MONITOR_HEART, pill_pico_txt, ft.Colors.PINK_400),
+                        status_pill(ft.Icons.LOCK_OPEN, pill_lock_txt, ft.Colors.GREEN_400),
+                        status_pill(ft.Icons.BATTERY_STD, pill_bat_txt, ft.Colors.AMBER_300),
                         status_pill(ft.Icons.SECURITY, pill_alarm_txt, ft.Colors.ORANGE_400),
                         status_pill(ft.Icons.DOOR_FRONT_DOOR, pill_door_txt, ft.Colors.BROWN_300),
                         status_pill(ft.Icons.DIRECTIONS_CAR, pill_car_txt, ft.Colors.GREEN_400),
@@ -2377,11 +2489,40 @@ def main(page: ft.Page) -> None:
                         color=ft.Colors.WHITE,
                         on_click=send_odd_choreography_click,
                     ),
+                    ft.Button(
+                        content="⏱ Sincronizado en 10 s",
+                        icon=ft.Icons.SCHEDULE,
+                        bgcolor=ft.Colors.INDIGO_700,
+                        color=ft.Colors.WHITE,
+                        on_click=schedule_odd_10s_click,
+                    ),
+                    ft.OutlinedButton(
+                        content="Abrir gemelo virtual",
+                        icon=ft.Icons.OPEN_IN_NEW,
+                        on_click=open_virtual_twin_click,
+                    ),
                     ft.OutlinedButton(
                         content="Detener Coreografía",
                         icon=ft.Icons.STOP,
                         on_click=emergency_stop,
                     ),
+                ],
+            ),
+            choreo_progress_bar,
+            choreo_delay_txt,
+            ft.Divider(height=1, color=ft.Colors.WHITE_12),
+            ft.Row(
+                wrap=True,
+                spacing=8,
+                controls=[
+                    ft.Text("Conducción rápida:", size=12, weight=ft.FontWeight.BOLD),
+                    ft.OutlinedButton(content="Lenta (1.0 dm/s)", on_click=lambda _: drive_speed_dm.__setitem__(0, 1.0)),
+                    ft.OutlinedButton(content="Media (2.0 dm/s)", on_click=lambda _: drive_speed_dm.__setitem__(0, 2.0)),
+                    ft.OutlinedButton(content="Rápida (3.5 dm/s)", on_click=lambda _: drive_speed_dm.__setitem__(0, 3.5)),
+                    ft.IconButton(icon=ft.Icons.ARROW_UPWARD, tooltip="Avanzar (W / ↑)", on_click=lambda _: send_official_motion_state(drive_speed_dm[0], 0.0, 0.0, 0.0, 0.3)),
+                    ft.IconButton(icon=ft.Icons.ARROW_DOWNWARD, tooltip="Retroceder (S / ↓)", on_click=lambda _: send_official_motion_state(-drive_speed_dm[0], 0.0, 0.0, 0.0, 0.3)),
+                    ft.IconButton(icon=ft.Icons.ARROW_BACK, tooltip="Girar Izquierda (A / ←)", on_click=lambda _: send_official_motion_state(0.0, 45.0, 0.0, 0.0, 0.3)),
+                    ft.IconButton(icon=ft.Icons.ARROW_FORWARD, tooltip="Girar Derecha (D / →)", on_click=lambda _: send_official_motion_state(0.0, -45.0, 0.0, 0.0, 0.3)),
                 ],
             ),
             ft.Text(
@@ -2402,7 +2543,7 @@ def main(page: ft.Page) -> None:
     )
 
     card_oled_control, _ = build_card(
-        "Pantalla OLED SSD1306 I²C (GP26/GP27, 0x3C, Tópico oled/text)",
+        "Pantalla OLED SSD1306 I²C0 (GP20/GP21, 0x3C, Tópico oled/text)",
         ft.Icons.TV,
         ft.Colors.AMBER_300,
         [
@@ -3305,6 +3446,20 @@ def main(page: ft.Page) -> None:
                         on_click=request_robot_status_sync,
                     ),
                     ft.Button(
+                        content="Bloquear Robot",
+                        icon=ft.Icons.LOCK,
+                        bgcolor=ft.Colors.AMBER_800,
+                        color=ft.Colors.WHITE,
+                        on_click=lock_robot_click,
+                    ),
+                    ft.Button(
+                        content="Desbloquear Robot",
+                        icon=ft.Icons.LOCK_OPEN,
+                        bgcolor=ft.Colors.GREEN_700,
+                        color=ft.Colors.WHITE,
+                        on_click=unlock_robot_click,
+                    ),
+                    ft.Button(
                         content="Exportar Reporte JSON",
                         icon=ft.Icons.SAVE,
                         bgcolor=ft.Colors.TEAL_700,
@@ -3420,10 +3575,10 @@ def main(page: ft.Page) -> None:
             return
         if key in ("arrow up", "w"):
             _last_kbd_ts[0] = now_ts
-            send_official_motion_state(2.0, 0.0, 0.0, 0.0, 0.3)
+            send_official_motion_state(drive_speed_dm[0], 0.0, 0.0, 0.0, 0.3)
         elif key in ("arrow down", "s"):
             _last_kbd_ts[0] = now_ts
-            send_official_motion_state(-2.0, 0.0, 0.0, 0.0, 0.3)
+            send_official_motion_state(-drive_speed_dm[0], 0.0, 0.0, 0.0, 0.3)
         elif key in ("arrow left", "a"):
             _last_kbd_ts[0] = now_ts
             send_official_motion_state(0.0, 45.0, 0.0, 0.0, 0.3)

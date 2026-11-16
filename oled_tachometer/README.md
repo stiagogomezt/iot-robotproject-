@@ -143,7 +143,7 @@ Las pruebas reproducibles se ejecutaron midiendo 100 iteraciones con `time.ticks
 
 1. Conecte la Raspberry Pi Pico 2 W a la computadora por USB.
 2. Abra **Thonny IDE** y asegúrese de que el intérprete esté configurado en `MicroPython (Raspberry Pi Pico)`.
-3. Verifique que la pantalla OLED esté conectada a `GP26` (SDA) y `GP27` (SCL) alimentada a `3V3`.
+3. Verifique que la pantalla OLED esté conectada a `GP20` (SDA) y `GP21` (SCL) en `I2C(0)` alimentada a `3V3`.
 4. Suba la carpeta [`oled_tachometer/`](file:///c:/Users/kevin/.gemini/antigravity-ide/scratch/Proyecto_IoT_Completo/oled_tachometer/) a la memoria Flash de la Pico 2 W.
 5. Abra el archivo [`oled_tachometer/main.py`](file:///c:/Users/kevin/.gemini/antigravity-ide/scratch/Proyecto_IoT_Completo/oled_tachometer/main.py) en Thonny.
 6. Presione **F5** (o el botón verde *Ejecutar script actual*).

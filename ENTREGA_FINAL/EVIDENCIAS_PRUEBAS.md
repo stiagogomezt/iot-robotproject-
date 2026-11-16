@@ -15,7 +15,7 @@ Registro formal de pruebas en hardware físico real y en banco de simulación PC
 | Arranque autónomo con powerbank (main.py) | ✅ Confirmado | El gemelo web oficial recibió watchdog/stats y node/send_second_ts. |
 | Recepción de coreografía `odd` | ✅ Confirmado | Secuencia 'odd' registrada y completada en ~16 s en hardware. |
 | Motores: las 4 combinaciones (rueda × sentido) | ✅ Confirmado | Prueba en el aire a 1 kHz: izq. adel. 80%, izq. atrás 60%, der. adel. 60%, der. atrás 60%. |
-| Motor derecho invertido | ✅ Corregido por software | robot_config: PIN_MOTOR_IN3=16, PIN_MOTOR_IN4=17 (cableado intacto). |
+| Motor derecho invertido | ✅ Corregido manualmente | robot_config: PIN_MOTOR_IN3=17, PIN_MOTOR_IN4=16 (cableado corregido y andando hacia adelante). |
 | Separación entre ruedas | ✅ Medida | WHEEL_BASE_L = 0.145 m (14.5 cm). |
 | Pruebas A/B/C con car.py nuevo (PWM mínimo + patada) | ⏳ Pendiente | PENDIENTE DE PRUEBA EN THONNY (prueba_04). |
 | Servos GP15 (hombro) / GP14 (codo): calibración ángulo↔pulso | ⏳ Pendiente | PENDIENTE DE PRUEBA EN THONNY (prueba_05). Valores base [1000, 2000] us seguros. |

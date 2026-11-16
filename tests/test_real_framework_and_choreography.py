@@ -325,3 +325,90 @@ def test_net_autonomo_status_map_and_reconnection_task():
     assert oled_mock.show_status.called
     assert "WiFi: reconectando" in str(oled_mock.show_status.call_args)
 
+
+def test_motor_pins_confirmed_and_5s_step_not_cut(monkeypatch):
+    """Verifica pines IN3=17/IN4=16 confirmados y que un paso de 5 s no se corta a los 2 s."""
+    import types
+    import time
+    from unittest.mock import MagicMock
+
+    assert robot_config.PIN_MOTOR_IN1 == 19
+    assert robot_config.PIN_MOTOR_IN2 == 18
+    assert robot_config.PIN_MOTOR_IN3 == 17
+    assert robot_config.PIN_MOTOR_IN4 == 16
+
+    fake_machine = types.ModuleType("machine")
+    fake_machine.Pin = MagicMock()
+    fake_pwm_inst = MagicMock()
+    fake_machine.PWM = MagicMock(return_value=fake_pwm_inst)
+    monkeypatch.setitem(sys.modules, "machine", fake_machine)
+
+    now_ms = [1000]
+    monkeypatch.setattr(time, "ticks_ms", lambda: now_ms[0], raising=False)
+    monkeypatch.setattr(time, "ticks_add", lambda a, b: a + b, raising=False)
+    monkeypatch.setattr(time, "ticks_diff", lambda a, b: a - b, raising=False)
+
+    import importlib
+    import car as car_mod
+    importlib.reload(car_mod)
+
+    class DummySched:
+        def add(self, t): pass
+
+    pubsub = MagicMock()
+    c = car_mod.Car(DummySched(), node=pubsub)
+    c.move_diff(0.157, math.radians(36), 5.0)
+    assert c.is_moving is True
+
+    # A los 2.5 s (> 2 * FAILSAFE_MS), debe SEGUIR moviendose porque la duracion es 5.0 s
+    now_ms[0] = 3500
+    c.update()
+    assert c.is_moving is True
+
+    # A los 5.0 s (t = 6000 ms), debe detenerse por duration_completed
+    now_ms[0] = 6000
+    c.update()
+    assert c.is_moving is False
+    assert c.last_stop_reason == "duration_completed"
+
+
+def test_pico_flash_alarm_and_battery_and_arm_ik(monkeypatch):
+    """Valida AlarmModule en pico_flash, BatteryMonitor ADC y cinematica 2D del brazo."""
+    from unittest.mock import MagicMock
+    from common.kinematics import arm_forward_kinematics, arm_inverse_kinematics
+
+    # 1. Cinematica brazo 2-link (09_Taller_Arm)
+    a1, a2 = arm_inverse_kinematics(0.12, 0.08, l1_m=0.10, l2_m=0.10)
+    x, y, rel = arm_forward_kinematics(a1, a2, l1_m=0.10, l2_m=0.10)
+    assert math.isclose(x, 0.12, abs_tol=1e-4)
+    assert math.isclose(y, 0.08, abs_tol=1e-4)
+    assert math.isclose(rel, a2 - a1, abs_tol=1e-6)
+
+    # 2. AlarmModule en pico_flash
+    from alarm_module import AlarmModule, DEFAULT_IR_PASSWORD
+    class DummySched:
+        def add(self, t): pass
+
+    pubsub = MagicMock()
+    car_mock = MagicMock()
+    alarm = AlarmModule(DummySched(), pubsub=pubsub, car=car_mock)
+    assert alarm.state == "DESARMADA"
+
+    # Clave 1-2-4-7 arma el sistema
+    for code in DEFAULT_IR_PASSWORD:
+        alarm.process_ir_code(code)
+    assert alarm.state == "ARMADA"
+
+    # Puerta abierta dispara alarma y detiene el robot
+    alarm.process_door_value(1)
+    assert alarm.state == "DISPARADA"
+    assert car_mock.emergency_stop.called
+
+    # 3. BatteryMonitor ADC
+    from battery_monitor import BatteryMonitor
+    monkeypatch.setattr(robot_config, "BATTERY_ENABLED", True)
+    bm = BatteryMonitor(DummySched(), pubsub=pubsub, pin_adc=28, divider=2.0)
+    bm.update()
+    assert any(call.args[0] == "battery/status" for call in pubsub.publish.call_args_list)
+    monkeypatch.setattr(robot_config, "BATTERY_ENABLED", False)
+
